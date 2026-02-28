@@ -9,12 +9,15 @@
  */
 
 import { useState, useMemo } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { LINES, TOTAL_STATIONS } from "@/lib/stationsData";
-import { useVisitedStations } from "@/hooks/useVisitedStations";
+import { useVisits } from "@/hooks/useVisits";
 import LineSection from "@/components/LineSection";
 import ProgressRing from "@/components/ProgressRing";
 import FilterBar from "@/components/FilterBar";
-import { Train, RotateCcw } from "lucide-react";
+import PhotoLightbox from "@/components/PhotoLightbox";
+import { Train, RotateCcw, LogIn, Loader2 } from "lucide-react";
+import { getLoginUrl } from "@/const";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,15 +33,28 @@ import {
 export type FilterMode = "all" | "visited" | "unvisited";
 
 export default function Home() {
-  const { visited, toggleStation, markAllOnLine, unmarkAllOnLine, resetAll } =
-    useVisitedStations();
+  const { user, loading: authLoading } = useAuth();
+
+  const {
+    visitMap,
+    isLoading: visitsLoading,
+    toggleStation,
+    markAllOnLine,
+    unmarkAllOnLine,
+    uploadPhoto,
+    removePhoto,
+    resetAll,
+    isUploading,
+  } = useVisits();
+
   const [filter, setFilter] = useState<FilterMode>("all");
   const [search, setSearch] = useState("");
   const [expandedLines, setExpandedLines] = useState<Set<string>>(
     new Set(LINES.map((l) => l.id))
   );
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
 
-  const totalVisited = visited.size;
+  const totalVisited = visitMap.size;
   const progressPct = TOTAL_STATIONS > 0 ? (totalVisited / TOTAL_STATIONS) * 100 : 0;
 
   const toggleLineExpanded = (lineId: string) => {
@@ -53,14 +69,12 @@ export default function Home() {
   const expandAll = () => setExpandedLines(new Set(LINES.map((l) => l.id)));
   const collapseAll = () => setExpandedLines(new Set());
 
-  // Filter lines/stations based on search + filter mode
   const filteredLines = useMemo(() => {
     return LINES.map((line) => {
       const stations = line.stations.filter((s) => {
         const matchesSearch =
-          search === "" ||
-          s.name.toLowerCase().includes(search.toLowerCase());
-        const isVisited = visited.has(s.id);
+          search === "" || s.name.toLowerCase().includes(search.toLowerCase());
+        const isVisited = visitMap.has(s.id);
         const matchesFilter =
           filter === "all" ||
           (filter === "visited" && isVisited) ||
@@ -69,10 +83,67 @@ export default function Home() {
       });
       return { ...line, stations };
     }).filter((line) => line.stations.length > 0);
-  }, [search, filter, visited]);
+  }, [search, filter, visitMap]);
 
+  // ── Auth gate ──────────────────────────────────────────────────────────────
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#FAFAF8" }}>
+        <Loader2 className="animate-spin text-stone-400" size={32} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4" style={{ backgroundColor: "#FAFAF8" }}>
+        {/* Roundel */}
+        <svg viewBox="0 0 80 80" className="w-20 h-20">
+          <circle cx="40" cy="40" r="36" fill="#E32017" />
+          <circle cx="40" cy="40" r="28" fill="#003688" />
+          <circle cx="40" cy="40" r="20" fill="#E32017" />
+          <rect x="4" y="32" width="72" height="16" fill="#003688" />
+          <circle cx="40" cy="40" r="14" fill="white" />
+        </svg>
+        <div className="text-center">
+          <h1
+            className="text-3xl font-bold text-stone-900 mb-1"
+            style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+          >
+            Tube Tracker
+          </h1>
+          <p className="text-stone-500 text-sm tracking-widest uppercase font-medium mb-6"
+             style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            London Underground
+          </p>
+          <p className="text-stone-600 mb-6 max-w-xs mx-auto text-sm leading-relaxed">
+            Sign in to track your station visits and attach your Instagram photos.
+          </p>
+          <a
+            href={getLoginUrl()}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold text-sm transition-all hover:opacity-90 active:scale-95"
+            style={{ backgroundColor: "#E32017", fontFamily: "'IBM Plex Sans', sans-serif" }}
+          >
+            <LogIn size={16} />
+            Sign in to start tracking
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main app ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#FAFAF8" }}>
+      {/* Lightbox */}
+      {lightbox && (
+        <PhotoLightbox
+          url={lightbox.url}
+          name={lightbox.name}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-stone-200 bg-[#FAFAF8]/95 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4">
@@ -82,13 +153,10 @@ export default function Home() {
               {/* Roundel icon */}
               <div className="flex-shrink-0 w-10 h-10 relative">
                 <svg viewBox="0 0 40 40" className="w-10 h-10">
-                  {/* Outer ring */}
                   <circle cx="20" cy="20" r="18" fill="#E32017" />
                   <circle cx="20" cy="20" r="14" fill="#003688" />
                   <circle cx="20" cy="20" r="10" fill="#E32017" />
-                  {/* Horizontal bar */}
                   <rect x="2" y="16" width="36" height="8" fill="#003688" />
-                  {/* Inner white circle */}
                   <circle cx="20" cy="20" r="7" fill="white" />
                 </svg>
               </div>
@@ -99,8 +167,10 @@ export default function Home() {
                 >
                   Tube Tracker
                 </h1>
-                <p className="text-xs text-stone-500 font-medium tracking-widest uppercase mt-0.5"
-                   style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                <p
+                  className="text-xs text-stone-500 font-medium tracking-widest uppercase mt-0.5"
+                  style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                >
                   London Underground
                 </p>
               </div>
@@ -113,7 +183,11 @@ export default function Home() {
                   className="text-2xl font-bold text-stone-900"
                   style={{ fontFamily: "'IBM Plex Mono', monospace" }}
                 >
-                  {totalVisited}
+                  {visitsLoading ? (
+                    <Loader2 size={20} className="animate-spin text-stone-400 inline" />
+                  ) : (
+                    totalVisited
+                  )}
                   <span className="text-stone-400 font-normal text-lg">
                     /{TOTAL_STATIONS}
                   </span>
@@ -135,17 +209,20 @@ export default function Home() {
           <div className="mt-3 h-1 bg-stone-200 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${progressPct}%`,
-                backgroundColor: "#E32017",
-              }}
+              style={{ width: `${progressPct}%`, backgroundColor: "#E32017" }}
             />
           </div>
           <div className="flex justify-between mt-1">
-            <span className="text-xs text-stone-400" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            <span
+              className="text-xs text-stone-400"
+              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+            >
               {progressPct.toFixed(1)}% complete
             </span>
-            <span className="text-xs text-stone-400 sm:hidden" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            <span
+              className="text-xs text-stone-400 sm:hidden"
+              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+            >
               {totalVisited}/{TOTAL_STATIONS}
             </span>
           </div>
@@ -175,25 +252,23 @@ export default function Home() {
         ) : (
           <div className="space-y-3">
             {filteredLines.map((line) => {
-              const lineVisited = line.stations.filter((s) =>
-                visited.has(s.id)
-              ).length;
+              const lineVisited = line.stations.filter((s) => visitMap.has(s.id)).length;
               const isExpanded = expandedLines.has(line.id);
               return (
                 <LineSection
                   key={line.id}
                   line={line}
-                  visited={visited}
+                  visitMap={visitMap}
                   visitedCount={lineVisited}
                   isExpanded={isExpanded}
                   onToggleExpand={() => toggleLineExpanded(line.id)}
                   onToggleStation={toggleStation}
-                  onMarkAll={() =>
-                    markAllOnLine(line.stations.map((s) => s.id))
-                  }
-                  onUnmarkAll={() =>
-                    unmarkAllOnLine(line.stations.map((s) => s.id))
-                  }
+                  onMarkAll={() => markAllOnLine(line.stations.map((s) => s.id))}
+                  onUnmarkAll={() => unmarkAllOnLine(line.stations.map((s) => s.id))}
+                  onUploadPhoto={uploadPhoto}
+                  onRemovePhoto={removePhoto}
+                  onLightbox={(url, name) => setLightbox({ url, name })}
+                  isUploading={isUploading}
                 />
               );
             })}
@@ -215,8 +290,7 @@ export default function Home() {
                   <AlertDialogTitle>Reset all progress?</AlertDialogTitle>
                   <AlertDialogDescription>
                     This will uncheck all {totalVisited} visited station
-                    {totalVisited !== 1 ? "s" : ""}. This action cannot be
-                    undone.
+                    {totalVisited !== 1 ? "s" : ""} and remove all attached photos. This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

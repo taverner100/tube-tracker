@@ -2,7 +2,7 @@
  * Design: Cartographic Minimalism
  * Accordion section for a single tube line.
  * - Thick coloured left-border rule (4px) in the line's TfL colour
- * - Slim station rows with checkbox, name, zone badge
+ * - Slim station rows with checkbox, name, zone badge, and photo zone
  * - Per-line progress donut + visited count
  * - Mark all / Unmark all controls
  *
@@ -14,28 +14,38 @@
 import { ChevronDown, ChevronRight, CheckCheck, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Line } from "@/lib/stationsData";
+import type { VisitRecord } from "@/hooks/useVisits";
 import ProgressRing from "./ProgressRing";
+import StationPhotoZone from "./StationPhotoZone";
 
 interface LineSectionProps {
   line: Line;
-  visited: Set<string>;
+  visitMap: Map<string, VisitRecord>;
   visitedCount: number;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onToggleStation: (id: string) => void;
   onMarkAll: () => void;
   onUnmarkAll: () => void;
+  onUploadPhoto: (stationId: string, file: File) => Promise<void>;
+  onRemovePhoto: (stationId: string) => void;
+  onLightbox: (url: string, name: string) => void;
+  isUploading: boolean;
 }
 
 export default function LineSection({
   line,
-  visited,
+  visitMap,
   visitedCount,
   isExpanded,
   onToggleExpand,
   onToggleStation,
   onMarkAll,
   onUnmarkAll,
+  onUploadPhoto,
+  onRemovePhoto,
+  onLightbox,
+  isUploading,
 }: LineSectionProps) {
   const total = line.stations.length;
   const pct = total > 0 ? (visitedCount / total) * 100 : 0;
@@ -62,11 +72,7 @@ export default function LineSection({
       >
         {/* Expand icon */}
         <span className="text-stone-400 flex-shrink-0">
-          {isExpanded ? (
-            <ChevronDown size={16} />
-          ) : (
-            <ChevronRight size={16} />
-          )}
+          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
 
         {/* Line colour pill + name */}
@@ -99,7 +105,6 @@ export default function LineSection({
           className="flex-shrink-0 flex items-center gap-3"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Mark/Unmark all — only visible when expanded */}
           {isExpanded && (
             <div className="flex items-center gap-1">
               <button
@@ -145,75 +150,84 @@ export default function LineSection({
           >
             <div className="border-t border-stone-100">
               {line.stations.map((station, idx) => {
-                const isVisited = visited.has(station.id);
+                const visit = visitMap.get(station.id);
+                const isVisited = !!visit;
                 return (
-                  <label
+                  <div
                     key={station.id}
-                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors group ${
+                    className={`flex items-center gap-3 px-4 py-2.5 transition-colors group ${
                       idx % 2 === 0 ? "bg-white" : "bg-stone-50/50"
                     } hover:bg-stone-50`}
                   >
-                    {/* Custom checkbox */}
-                    <div className="relative flex-shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={isVisited}
-                        onChange={() => onToggleStation(station.id)}
-                        className="sr-only"
-                      />
-                      <div
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-150 ${
-                          isVisited
-                            ? "border-transparent"
-                            : "border-stone-300 group-hover:border-stone-400"
-                        }`}
-                        style={
-                          isVisited
-                            ? { backgroundColor: line.colour }
-                            : {}
-                        }
-                      >
-                        {isVisited && (
-                          <svg
-                            className="w-3 h-3"
-                            viewBox="0 0 12 12"
-                            fill="none"
-                          >
-                            <path
-                              d="M2 6l3 3 5-5"
-                              stroke={line.textColour}
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
+                    {/* Checkbox — wrapped in label for click area */}
+                    <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                      <div className="relative flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={isVisited}
+                          onChange={() => onToggleStation(station.id)}
+                          className="sr-only"
+                        />
+                        <div
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-150 ${
+                            isVisited
+                              ? "border-transparent"
+                              : "border-stone-300 group-hover:border-stone-400"
+                          }`}
+                          style={isVisited ? { backgroundColor: line.colour } : {}}
+                        >
+                          {isVisited && (
+                            <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none">
+                              <path
+                                d="M2 6l3 3 5-5"
+                                stroke={line.textColour}
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Station name */}
-                    <span
-                      className={`flex-1 text-sm transition-all duration-150 ${
-                        isVisited
-                          ? "text-stone-400 line-through decoration-stone-300"
-                          : "text-stone-800"
-                      }`}
-                      style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}
-                    >
-                      {station.name}
-                    </span>
-
-                    {/* Zone badge */}
-                    {station.zone && (
+                      {/* Station name */}
                       <span
-                        className="text-xs text-stone-400 flex-shrink-0 tabular-nums"
-                        style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                        title={`Zone ${station.zone}`}
+                        className={`flex-1 text-sm transition-all duration-150 ${
+                          isVisited
+                            ? "text-stone-400 line-through decoration-stone-300"
+                            : "text-stone-800"
+                        }`}
+                        style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}
                       >
-                        Z{station.zone}
+                        {station.name}
                       </span>
+
+                      {/* Zone badge */}
+                      {station.zone && (
+                        <span
+                          className="text-xs text-stone-400 flex-shrink-0 tabular-nums"
+                          style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                          title={`Zone ${station.zone}`}
+                        >
+                          Z{station.zone}
+                        </span>
+                      )}
+                    </label>
+
+                    {/* Photo zone — only shown when visited */}
+                    {isVisited && (
+                      <StationPhotoZone
+                        stationId={station.id}
+                        photoUrl={visit.photoUrl ?? null}
+                        photoFilename={visit.photoFilename ?? null}
+                        lineColour={line.colour}
+                        isUploading={isUploading}
+                        onUpload={onUploadPhoto}
+                        onRemove={onRemovePhoto}
+                        onLightbox={onLightbox}
+                      />
                     )}
-                  </label>
+                  </div>
                 );
               })}
             </div>
