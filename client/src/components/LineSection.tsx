@@ -5,6 +5,10 @@
  * - Slim station rows with checkbox, name, zone badge
  * - Per-line progress donut + visited count
  * - Mark all / Unmark all controls
+ *
+ * NOTE: The header is a <div role="button"> (not a <button>) because it
+ * contains nested <button> elements (Mark All / None), and HTML does not
+ * allow <button> inside <button>.
  */
 
 import { ChevronDown, ChevronRight, CheckCheck, X } from "lucide-react";
@@ -42,10 +46,19 @@ export default function LineSection({
       className="bg-white rounded-xl overflow-hidden border border-stone-100 shadow-sm"
       style={{ borderLeft: `4px solid ${line.colour}` }}
     >
-      {/* Header row */}
-      <button
+      {/* Header row — div instead of button to allow nested buttons */}
+      <div
+        className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-stone-50 transition-colors cursor-pointer select-none"
         onClick={onToggleExpand}
-        className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-stone-50 transition-colors text-left"
+        role="button"
+        aria-expanded={isExpanded}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggleExpand();
+          }
+        }}
       >
         {/* Expand icon */}
         <span className="text-stone-400 flex-shrink-0">
@@ -81,14 +94,14 @@ export default function LineSection({
           )}
         </div>
 
-        {/* Progress ring */}
-        <div className="flex-shrink-0 flex items-center gap-3">
+        {/* Right side: Mark/Unmark buttons + progress ring */}
+        <div
+          className="flex-shrink-0 flex items-center gap-3"
+          onClick={(e) => e.stopPropagation()}
+        >
           {/* Mark/Unmark all — only visible when expanded */}
           {isExpanded && (
-            <div
-              className="flex items-center gap-1"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className="flex items-center gap-1">
               <button
                 onClick={onMarkAll}
                 title="Mark all as visited"
@@ -117,7 +130,7 @@ export default function LineSection({
             showLabel={false}
           />
         </div>
-      </button>
+      </div>
 
       {/* Station list */}
       <AnimatePresence initial={false}>
