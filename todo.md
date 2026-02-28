@@ -17,3 +17,4 @@
 - [x] Show photo thumbnail next to visited stations
 - [x] Photo lightbox/full-size view on click
 - [x] Write vitest tests for photo upload procedure
+- [x] Sort stations within each line: unvisited first (alphabetical), visited below

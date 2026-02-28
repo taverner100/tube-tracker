@@ -149,7 +149,14 @@ export default function LineSection({
             style={{ overflow: "hidden" }}
           >
             <div className="border-t border-stone-100">
-              {line.stations.map((station, idx) => {
+              {[...line.stations]
+                .sort((a, b) => {
+                  const aVisited = visitMap.has(a.id) ? 1 : 0;
+                  const bVisited = visitMap.has(b.id) ? 1 : 0;
+                  // Unvisited (0) before visited (1); preserve original order within each group
+                  return aVisited - bVisited;
+                })
+                .map((station, idx) => {
                 const visit = visitMap.get(station.id);
                 const isVisited = !!visit;
                 return (
