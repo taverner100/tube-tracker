@@ -27,3 +27,13 @@
 - [x] Start app with pm2 (tube-tracker, port 3002)
 - [x] Configure nginx reverse proxy on port 8082
 - [x] Verify HTTP 200 at http://178.104.241.78:8082/
+
+## Self-hosted Hetzner Migration
+- [x] Replace Manus OAuth with PIN-based auth (server-side bcrypt hash)
+- [x] Replace Manus Forge storage with local disk storage (Express static serving)
+- [x] Switch drizzle config to support both TiDB (Manus) and local MySQL (Hetzner)
+- [x] Update frontend PIN login page (replace OAuth redirect)
+- [x] Update useAuth hook to use PIN session instead of OAuth
+- [x] Run tests and save checkpoint
+- [x] Push to GitHub and rebuild on Hetzner
+- [x] Verify photo upload, auth, and station tracking work on Hetzner

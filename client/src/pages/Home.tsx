@@ -8,16 +8,18 @@
  * - Swiss International Typographic Style meets London wayfinding
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { LINES, TOTAL_STATIONS } from "@/lib/stationsData";
 import { useVisits } from "@/hooks/useVisits";
 import LineSection from "@/components/LineSection";
 import ProgressRing from "@/components/ProgressRing";
 import FilterBar from "@/components/FilterBar";
 import PhotoLightbox from "@/components/PhotoLightbox";
-import { Train, RotateCcw, LogIn, Loader2 } from "lucide-react";
+import { Train, RotateCcw, LogIn, Loader2, KeyRound } from "lucide-react";
 import { getLoginUrl } from "@/const";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,6 +87,35 @@ export default function Home() {
     }).filter((line) => line.stations.length > 0);
   }, [search, filter, visitMap]);
 
+  // ── Auth mode detection ────────────────────────────────────────────────────
+  const { data: authModeData } = trpc.auth.authMode.useQuery();
+  const authMode = authModeData?.mode ?? "oauth";
+
+  // ── PIN login state ────────────────────────────────────────────────────────
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState("");
+  const pinInputRef = useRef<HTMLInputElement>(null);
+  const utils = trpc.useUtils();
+  const pinLoginMutation = trpc.auth.pinLogin.useMutation({
+    onSuccess: () => {
+      setPin("");
+      setPinError("");
+      utils.auth.me.invalidate();
+    },
+    onError: (err) => {
+      setPinError(err.message || "Incorrect PIN");
+      setPin("");
+      pinInputRef.current?.focus();
+    },
+  });
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pin.trim()) return;
+    setPinError("");
+    pinLoginMutation.mutate({ pin: pin.trim() });
+  };
+
   // ── Auth gate ──────────────────────────────────────────────────────────────
   if (authLoading) {
     return (
@@ -97,7 +128,7 @@ export default function Home() {
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4" style={{ backgroundColor: "#FAFAF8" }}>
-        {/* Roundel */}
+        {/* TfL Roundel */}
         <svg viewBox="0 0 80 80" className="w-20 h-20">
           <circle cx="40" cy="40" r="36" fill="#E32017" />
           <circle cx="40" cy="40" r="28" fill="#003688" />
@@ -117,16 +148,59 @@ export default function Home() {
             London Underground
           </p>
           <p className="text-stone-600 mb-6 max-w-xs mx-auto text-sm leading-relaxed">
-            Sign in to track your station visits and attach your Instagram photos.
+            {authMode === "pin"
+              ? "Enter your PIN to access your station tracker."
+              : "Sign in to track your station visits and attach your Instagram photos."}
           </p>
-          <a
-            href={getLoginUrl()}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold text-sm transition-all hover:opacity-90 active:scale-95"
-            style={{ backgroundColor: "#E32017", fontFamily: "'IBM Plex Sans', sans-serif" }}
-          >
-            <LogIn size={16} />
-            Sign in to start tracking
-          </a>
+
+          {authMode === "pin" ? (
+            /* ── PIN login form ── */
+            <form onSubmit={handlePinSubmit} className="flex flex-col items-center gap-3">
+              <div className="relative">
+                <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  ref={pinInputRef}
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="Enter PIN"
+                  value={pin}
+                  onChange={(e) => { setPin(e.target.value); setPinError(""); }}
+                  autoFocus
+                  className="pl-8 pr-4 py-2.5 rounded-xl border text-sm w-48 text-center tracking-widest outline-none focus:ring-2"
+                  style={{
+                    borderColor: pinError ? "#E32017" : "#d6d3d1",
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    boxShadow: pinError ? "0 0 0 2px #E3201733" : undefined,
+                  }}
+                  disabled={pinLoginMutation.isPending}
+                />
+              </div>
+              {pinError && (
+                <p className="text-xs text-red-600" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                  {pinError}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={pinLoginMutation.isPending || !pin.trim()}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold text-sm transition-all hover:opacity-90 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#E32017", fontFamily: "'IBM Plex Sans', sans-serif" }}
+              >
+                {pinLoginMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
+                {pinLoginMutation.isPending ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
+          ) : (
+            /* ── Manus OAuth button ── */
+            <a
+              href={getLoginUrl()}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold text-sm transition-all hover:opacity-90 active:scale-95"
+              style={{ backgroundColor: "#E32017", fontFamily: "'IBM Plex Sans', sans-serif" }}
+            >
+              <LogIn size={16} />
+              Sign in to start tracking
+            </a>
+          )}
         </div>
       </div>
     );
