@@ -18,3 +18,12 @@
 - [x] Photo lightbox/full-size view on click
 - [x] Write vitest tests for photo upload procedure
 - [x] Sort stations within each line: unvisited first (alphabetical), visited below
+- [x] Audit project for incomplete/partially-wired features — all features confirmed complete
+- [x] TypeScript check passes with 0 errors
+- [x] All 8 vitest tests pass
+- [x] Push code to GitHub (taverner100/tube-tracker)
+- [x] Deploy to Hetzner server at 178.104.241.78 via SSH
+- [x] Run pnpm install, pnpm build, pnpm db:push on Hetzner server
+- [x] Start app with pm2 (tube-tracker, port 3002)
+- [x] Configure nginx reverse proxy on port 8082
+- [x] Verify HTTP 200 at http://178.104.241.78:8082/
